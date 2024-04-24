@@ -1,6 +1,8 @@
+import datetime, time
+
 import numpy as np, os, pickle, cv2, glob
 from imageio import imread
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, Callback, TensorBoard
 from sklearn import metrics
 from imageio import imsave
 from pathlib import Path
@@ -11,7 +13,7 @@ from prepare_data import *
 #from prepare_data_test import *
 from data_process import *
 from model import *
-
+#import matplotlib.pyplot as plt
 
 def Sens(y_true, y_pred):
     cm1 = metrics.confusion_matrix(y_true, y_pred, labels=[1, 0])  # labels =[1,0] [positive [Hemorrhage], negative]
@@ -83,14 +85,16 @@ data_gen_args = dict(
     fill_mode="nearest"
     )
 
-
+class CustomCallback(Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        print('Epoch: {}, Loss: {}, Accuracy: {}'.format(epoch, logs['loss'], logs['accuracy']))
 
 if __name__=='__main__':
     #############################################Training Parameters#######################################################
     num_CV=5
-    NumEpochs=100
+    NumEpochs=1
     NumEpochEval=1 #validated the model each NumEpochEval epochs
-    batch_size = 32
+    batch_size = 64
     learning_rateI = 1e-5
     decayI=learning_rateI/NumEpochs
     detectionSen=20*20# labeling each slice as ICH if hemorrhage is detected in detectionSen pixels
@@ -148,13 +152,19 @@ if __name__=='__main__':
         n_imagesTest = len(glob.glob(os.path.join(str(Path(dataDir,'test','crops','image')), "*.png")))
         trainGener = trainGenerator(batch_size,str(Path(dataDir,'train')),'image','label',data_gen_args,save_to_dir = None, target_size = (128,128))
         valGener = validateGenerator(batch_size,str(Path(dataDir,'validate')), 'image', 'label', save_to_dir=None, target_size = (128,128))
-        modelUnet = unet(learningRate=learning_rateI,decayRate=decayI, input_size =(windowLen,windowLen,1) )
-        #modelUnet = unet(data_format='channels_last',img_w=windowLen,img_h=windowLen,n_label=1, learningRate=learning_rateI,decayRate=decayI)
+        #modelUnet = unet(learningRate=learning_rateI,decayRate=decayI, input_size =(windowLen,windowLen,1) )
+        modelUnet = unet_test(data_format='channels_last',img_w=windowLen,img_h=windowLen,n_label=1, learningRate=learning_rateI,decayRate=decayI)
         #modelUnet = att_unet(img_w=windowLen,img_h=windowLen,n_label=1, learningRate=learning_rateI,decayRate=decayI)
-        model_checkpoint = ModelCheckpoint(str(Path(SaveDir,'unet_CV'+str(cvI)+'.hdf5')), monitor='val_jaccard_loss', mode='min',
-                                           verbose=1, save_best_only=True, period=NumEpochEval)
+
+        # 创建TensorBoard回调
+        log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1, update_freq='batch')
+
+        #model_checkpoint = ModelCheckpoint(str(Path(SaveDir,'unet_CV'+str(cvI)+'.hdf5')), monitor='val_jaccard_loss', mode='min',
+        #                                   verbose=1, save_best_only=True, period=NumEpochEval)
+        custom = CustomCallback()
         history1=modelUnet.fit_generator(trainGener,epochs=NumEpochs,steps_per_epoch=int(n_imagesTrain/batch_size),
-                                        validation_data=valGener,validation_steps=n_imagesValidate,callbacks=[model_checkpoint])
+                                        validation_data=valGener,validation_steps=n_imagesValidate,callbacks=[custom])
 
         with open(str(Path(SaveDir,'history_CV'+str(cvI)+'.pkl')), 'wb') as Results:  # Python 3: open(..., 'wb')
             pickle.dump(

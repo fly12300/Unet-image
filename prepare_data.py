@@ -64,7 +64,6 @@ def prepare_data(dataset_zip_dir, crossvalid_dir, numSubj, imageLen, windowLen, 
             #Reading labels
             hemorrhage_diagnosis_df = pd.read_csv(Path(datasetDir, 'hemorrhage_diagnosis_raw_ct.csv'))
             hemorrhage_diagnosis_array = hemorrhage_diagnosis_df.values
-            print("hemorrhage_diagnosis_array ", hemorrhage_diagnosis_array)
             '''columns=['PatientNumber','SliceNumber','Intraventricular','Intraparenchymal','Subarachnoid','Epidural',
                                                                                       'Subdural', 'No_Hemorrhage']) '''
             hemorrhage_diagnosis_array[:, 0] = hemorrhage_diagnosis_array[:, 0] - 49  # starting the subject count from 0
